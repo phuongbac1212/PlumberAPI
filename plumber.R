@@ -15,47 +15,13 @@ library(R6)
 library(RMariaDB)
 require(DBI)
 
+source("AuxiliaryClass.R")
+
 #* @apiTitle Plumber API for MariaDB on EphemerisNAS
-# decalre R6 class for the general connection
-library(R6)
 
-DBClass = R6Class(
-  "DBClass",
-  public = list(
-    con = NULL,
-    initialize = function() {
-      self$con <-
-        dbConnect(
-          RMariaDB::MariaDB(),
-          host = "127.0.0.1",
-          port = 3036,
-          dbname = "Station_BG",
-          user = "bacnp",
-          password = "#Phuongbac2"
-        )
-      
-      query <-
-        paste(
-          "CREATE TABLE IF NOT EXISTS Meteo (time BIGINT, soil_moisture float(10,2), temperature float(10,2), EC float(10,2), pH float(10,2), N float(10,2), P float(10,2), K float(10,2), salinity float(10,2), TDS float(10,2), wind_speed float(10,2), wind_direction INT, atmos_pressure float(10,2), humidity float(10,2));"
-        )
-      dbExecute(self$con, query)
-      query <-
-        paste("CREATE TABLE IF NOT EXISTS GR30 (time INT, rtcm_msg BLOB(2048));")
-      dbExecute(self$con, query)
-    },
-    getDBConnection = function() {
-      if (!dbIsValid(self$con))
-        self$initialize
-      return(self$con)
-    },
-    finalize = function() {
-      dbDisconnect(self$con)
-    }
-  )
-)
-
-db = DBClass$new()
-db$getDBConnection()
+gr30DB = GR30DBClass$new()
+auxDB = AuxiliaryDBClass$new()
+polarisalpha = PolarisAlphaDBClass$new()
 
 #* post meteo data
 #* @param time:int              The sending timestamp
@@ -72,24 +38,29 @@ db$getDBConnection()
 #* @param wind_direction:float  The direction of the wind value
 #* @param atmos_pressure:float  The atmospheric pressure value
 #* @param humidity:float        The atmospheric humidity value
-#* @post /meteo_upload
-function(time,
-         soil_moisture,
-         temperature,
-         EC,
-         pH,
-         N,
-         P,
-         K,
-         salinity,
-         TDS,
-         wind_speed,
-         wind_direction,
-         atmos_pressure,
-         humidity) {
+#* @post /upload_aux
+function(time = -1,
+         soil_moisture = -1,
+         temperature = -1,
+         EC = -1,
+         pH = -1,
+         N = -1,
+         P = -1,
+         K = -1,
+         salinity = -1,
+         TDS = -1,
+         wind_speed = -1,
+         wind_direction = -1,
+         atmos_pressure = -1,
+         humidity = -1) {
+  auxDB$updateTime(as.numeric(time))
   dbExecute(
-    db$getDBConnection(),
-    "INSERT into Meteo (time, soil_moisture, temperature, EC, pH, N, P, K, salinity, TDS, wind_speed, wind_direction, atmos_pressure, humidity) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+    auxDB$getDBConnection(),
+    paste0(
+      "INSERT into Y",
+      auxDB$getTable(),
+      " (time, soil_moisture, temperature, EC, pH, N, P, K, salinity, TDS, wind_speed, wind_direction, atmos_pressure, humidity) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
+    ),
     params = list(
       time,
       soil_moisture,
@@ -111,13 +82,18 @@ function(time,
 
 
 #* post GR30 RTCM3 msm7+ ephemeris message
-#* @param time:int      The sent time
+#* @param UTCtime:int    The sent UNIX timestamp
+#* @param GPSepoch      The received message epoch
 #* @param rtcm_msg:raw  The corresponding message in RTCM format
 #* @post  /rtcm_upload
-function(time, rtcm_msg) {
+function(UTCtime, GPSepoch, rtcm_msg) {
   if (class(rtcm_msg) == "character")
     rtcm_msg = charToRaw(rtcm_msg)
-  dbExecute(db$getDBConnection(),
-            "insert into GR30 values(?, ?)",
-            params = list(time, list(rtcm_msg)))
+  
+  gr30DB$updateTime(as.numeric(UTCtime), GPSepoch)
+  dbExecute(
+    gr30DB$getDBConnection(),
+    paste0("insert into W", gr30DB$getTable(), " values(?, ?)"),
+    params = list(UTCtime, list(rtcm_msg))
+  )
 }
