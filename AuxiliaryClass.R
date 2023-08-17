@@ -101,7 +101,7 @@ PolarisAlphaDBClass = R6Class(
         )
       
       query <-
-        paste0("CREATE TABLE IF NOT EXISTS W",self$week," (time INT, rtcm_msg BLOB(2048));")
+        paste0("CREATE TABLE IF NOT EXISTS W",self$week," (time INT, msg BLOB(4096));")
       dbExecute(self$con, query)
     }, 
     
@@ -111,8 +111,8 @@ PolarisAlphaDBClass = R6Class(
       return(self$con)
     },
     
-    updateTime = function(UTCtimestamp) {
-      week = UTCTimestampToGPSWeek(UTCtimestamp)
+    updateTime = function(GpsTimestamp) {
+      week = GPSTimestampToGPSWeek(GpsTimestamp)
       if (week != self$week) {
         self$week = week
         self$finalize()

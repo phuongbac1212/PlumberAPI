@@ -97,3 +97,20 @@ function(UTCtime, GPSepoch, rtcm_msg) {
     params = list(UTCtime, list(rtcm_msg))
   )
 }
+
+
+#* post GR30 RTCM3 msm7+ ephemeris message
+#* @param GPSTimestamp:int    The sent UNIX timestamp
+#* @param skytraq:raw  The corresponding message in RTCM format
+#* @post  /rtcm_upload
+function(GPSTimestamp, skytraq) {
+  if (class(rtcm_msg) == "character")
+    rtcm_msg = charToRaw(skytraq)
+  
+  polarisalpha$updateTime(as.numeric(GPSTimestamp))
+  dbExecute(
+    polarisalpha$getDBConnection(),
+    paste0("insert into W", polarisalpha$getTable(), " values(?, ?)"),
+    params = list(GPSTimestamp, list(skytraq))
+  )
+}
