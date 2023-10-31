@@ -1,0 +1,5 @@
+#!/usr/bin/bash
+echo "BUILDING IMAGE..."
+sudo docker build -t plumber-api .
+echo "RUNNING DOCKER IMAGE..."
+sudo docker run --network host -p 4114:4114 plumber-api

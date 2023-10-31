@@ -28,3 +28,7 @@ GPSTimeToUTCTime <- function(GPSweek, GPSms, output = "ts") {
 GPSTimestampToGPSWeek = function(GPSTimestamp) {
   return(floor(GPSTimestamp / 604800))
 }
+
+UTCtimeToGPStime = function(utcTimestamp) {
+  utcTimestamp - 315964800 - GLOBAL.LEAP_SECOND
+}

@@ -9,14 +9,14 @@
 #
 #    https://www.rplumber.io/
 #
-
 library(plumber)
 library(R6)
 library(RMariaDB)
 require(DBI)
-
+library(wkb)
+library(future)
 source("AuxiliaryClass.R")
-
+plan("multisession")
 #* @apiTitle Plumber API for MariaDB on EphemerisNAS
 
 gr30DB = GR30DBClass$new()
@@ -53,31 +53,33 @@ function(time = -1,
          wind_direction = -1,
          atmos_pressure = -1,
          humidity = -1) {
-  auxDB$updateTime(as.numeric(time))
-  dbExecute(
-    auxDB$getDBConnection(),
-    paste0(
-      "INSERT into Y",
-      auxDB$getTable(),
-      " (time, soil_moisture, temperature, EC, pH, N, P, K, salinity, TDS, wind_speed, wind_direction, atmos_pressure, humidity) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
-    ),
-    params = list(
-      time,
-      soil_moisture,
-      temperature,
-      EC,
-      pH,
-      N,
-      P,
-      K,
-      salinity,
-      TDS,
-      wind_speed,
-      wind_direction,
-      atmos_pressure,
-      humidity
+  promises::future_promise({
+    auxDB$updateTime(as.numeric(time))
+    dbExecute(
+      auxDB$getDBConnection(),
+      paste0(
+        "INSERT into Y",
+        auxDB$getTable(),
+        " (time, soil_moisture, temperature, EC, pH, N, P, K, salinity, TDS, wind_speed, wind_direction, atmos_pressure, humidity) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);"
+      ),
+      params = list(
+        time,
+        soil_moisture,
+        temperature,
+        EC,
+        pH,
+        N,
+        P,
+        K,
+        salinity,
+        TDS,
+        wind_speed,
+        wind_direction,
+        atmos_pressure,
+        humidity
+      )
     )
-  )
+  })
 }
 
 
@@ -87,30 +89,67 @@ function(time = -1,
 #* @param rtcm_msg:raw  The corresponding message in RTCM format
 #* @post  /rtcm_upload
 function(UTCtime, GPSepoch, rtcm_msg) {
-  if (class(rtcm_msg) == "character")
-    rtcm_msg = charToRaw(rtcm_msg)
-  
-  gr30DB$updateTime(as.numeric(UTCtime), GPSepoch)
-  dbExecute(
-    gr30DB$getDBConnection(),
-    paste0("insert into W", gr30DB$getTable(), " values(?, ?)"),
-    params = list(UTCtime, list(rtcm_msg))
-  )
+  promises::future_promise({
+    rtcm_msg = hex2raw(rtcm_msg)
+    gr30DB$updateTime(as.numeric(UTCtime), GPSepoch)
+    dbExecute(
+      gr30DB$getDBConnection(),
+      paste0("insert into W", gr30DB$getTable(), " values(?, ?)"),
+      params = list(UTCtime, list(rtcm_msg))
+    )
+  })
 }
 
 
-#* post GR30 RTCM3 msm7+ ephemeris message
-#* @param GPSTimestamp:int    The sent UNIX timestamp
-#* @param skytraq:raw  The corresponding message in RTCM format
-#* @post  /rtcm_upload
-function(GPSTimestamp, skytraq) {
-  if (class(rtcm_msg) == "character")
-    rtcm_msg = charToRaw(skytraq)
-  
-  polarisalpha$updateTime(as.numeric(GPSTimestamp))
-  dbExecute(
-    polarisalpha$getDBConnection(),
-    paste0("insert into W", polarisalpha$getTable(), " values(?, ?)"),
-    params = list(GPSTimestamp, list(skytraq))
-  )
+#* post skytraq ephemeris message
+#* @param GpsWeek:numeric         The GPS week
+#* @param GpsTow:numeric    The sent tow
+#* @param skytraq:string          The corresponding message in RTCM format
+#* @post  /skytraq_upload
+function(GpsWeek, GpsTow, skytraq) {
+  promises::future_promise({
+    skytraq = hex2raw(skytraq)
+    polarisalpha$updateTime(as.numeric(GpsWeek))
+    dbExecute(
+      polarisalpha$getDBConnection(),
+      paste0("insert into W", polarisalpha$getTable(), " values(?, ?)"),
+      params = list(GpsTow, list(skytraq))
+    )
+  })
+}
+
+#* get skytraq ephemeris message
+#* @param from:numeric  from epoch UTM
+#* @param to:numeric    to epoch UTM
+#* @serializer contentType list(type="application/rds")
+#* @return
+#* @get /alpha_get
+function(from, to, res) {
+  promises::future_promise({
+    from = as.numeric(from)
+    to = as.numeric(to)
+    stopifnot(as.numeric(from) | as.numeric(to))
+    w.from = UTCTimestampToGPSWeek(from)
+    w.to = UTCTimestampToGPSWeek(to)
+    tow.from = UTCtimeToGPStime(from) %% (7 * 24 * 60 * 60)
+    tow.to = UTCtimeToGPStime(to) %% (7 * 24 * 60 * 60)
+    res = lapply(
+      X = seq(w.from, w.to),
+      FUN = function(w) {
+        a = dbGetQuery(
+          polarisalpha$getDBConnection(),
+          paste0(
+            "select msg from PolarisAlpha.W",
+            w,
+            "  where tow between ",
+            tow.from,
+            " and ",
+            tow.to,
+            ";"
+          )
+        )
+      }
+    ) %>% unlist() %>% as.raw()
+    return (res)
+  })
 }

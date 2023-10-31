@@ -67,6 +67,7 @@ GR30DBClass = R6Class(
       week = UTCTimestampToGPSWeek(UTCtimestamp)
       if (week != self$week & GPSepoch <= 24*60*60) {
         self$week = week
+        self$finalize()
         self$initialize()
       }
     },
@@ -101,18 +102,19 @@ PolarisAlphaDBClass = R6Class(
         )
       
       query <-
-        paste0("CREATE TABLE IF NOT EXISTS W",self$week," (time INT, msg BLOB(4096));")
+        paste0("CREATE TABLE IF NOT EXISTS W",self$week," (tow BIGINT, msg BLOB(4096));")
       dbExecute(self$con, query)
     }, 
     
     getDBConnection = function() {
-      if (!dbIsValid(self$con))
+      if (!dbIsValid(self$con)){
+        self$finalize()
         self$initialize()
+      }
       return(self$con)
     },
     
-    updateTime = function(GpsTimestamp) {
-      week = GPSTimestampToGPSWeek(GpsTimestamp)
+    updateTime = function(week) {
       if (week != self$week) {
         self$week = week
         self$finalize()
@@ -159,8 +161,10 @@ AuxiliaryDBClass = R6Class(
       dbDisconnect(self$con)
     },
     getDBConnection = function() {
-      if (!dbIsValid(self$con))
+      if (!dbIsValid(self$con)) {
+        self$finalize()
         self$initialize()
+      }
       return(self$con)
     },
     
