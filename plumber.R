@@ -15,13 +15,17 @@ library(RMariaDB)
 require(DBI)
 library(wkb)
 library(future)
+
 source("AuxiliaryClass.R")
-plan("multisession")
+source("GPSTime.R")
+
 #* @apiTitle Plumber API for MariaDB on EphemerisNAS
 
 gr30DB = GR30DBClass$new()
 auxDB = AuxiliaryDBClass$new()
 polarisalpha = PolarisAlphaDBClass$new()
+
+plan(multicore)
 
 #* post meteo data
 #* @param time:int              The sending timestamp

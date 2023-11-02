@@ -1,10 +1,9 @@
 # GPS DATETIME
-require(lubridate)
+library(lubridate)
 
 GLOBAL.LEAP_SECOND = 18
 
 #* @param timestamp the POSIXct timestamp
-
 UTCTimestampToGPSWeek <- function(timestamp) {
   stopifnot(is.numeric(timestamp))
   gps_week <- floor((timestamp - 315964800 - GLOBAL.LEAP_SECOND) / 7/60/60/24)

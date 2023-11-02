@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y mysql-server mysql-client libmysqlclien
 
 
 # Install required R packages
-RUN Rscript -e "install.packages(c('plumber', 'R6', 'RMariaDB', 'lubridate', 'wkb'))"
+RUN Rscript -e "install.packages(c('plumber', 'R6', 'RMariaDB', 'lubridate', 'wkb', 'future'))"
 
 # Copy your R script into the image
 RUN mkdir /home/PlumberApi/
